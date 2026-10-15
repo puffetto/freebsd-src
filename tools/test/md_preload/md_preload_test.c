@@ -76,10 +76,12 @@ test_hold(void)
 	struct g_consumer *cp;
 	struct g_provider *pp;
 	const void *base, *again, *first = NULL;
+	void *data;
 	caddr_t mod;
 	size_t size, again_size;
 	char name[32];
-	unsigned i;
+	unsigned i, identity;
+	int error, matches;
 
 	g_topology_assert();
 	for (i = 0; i < nitems(consumers); i++) {
@@ -108,14 +110,23 @@ test_hold(void)
 		CHECK(base == NULL && size == 0);
 		CHECK(md_preload_hold(cp, &base, &size) == 0);
 		holds[i]++;
-		snprintf(name, sizeof(name), "/boot/mdtest%u.img", i);
+		/* Loader module order is not stable: identify through real device I/O. */
+		g_topology_unlock();
+		data = g_read_data(cp, 0, 512, &error);
+		g_topology_lock();
+		CHECK(data != NULL && error == 0);
+		identity = ((const u_char *)data)[0] - 'A';
+		matches = memcmp(data, base, 512) == 0;
+		g_free(data);
+		CHECK(identity < 2 && matches);
+		snprintf(name, sizeof(name), "/boot/mdtest%u.img", identity);
 		mod = preload_search_by_name(name);
 		CHECK(mod != NULL);
 		CHECK(base == preload_fetch_addr(mod));
 		CHECK(size == preload_fetch_size(mod));
 		CHECK(size >= PAGE_SIZE && size % PAGE_SIZE == 0);
-		CHECK(((const u_char *)base)[0] == 'A' + i);
-		CHECK(((const u_char *)base)[size - 1] == 'A' + i);
+		CHECK(((const u_char *)base)[0] == 'A' + identity);
+		CHECK(((const u_char *)base)[size - 1] == 'A' + identity);
 		CHECK(base != first);
 		first = base;
 		CHECK(md_preload_hold(cp, &again, &again_size) == 0);

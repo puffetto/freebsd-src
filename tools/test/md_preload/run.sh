@@ -12,7 +12,8 @@ here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 src=$(realpath "$here/../../..")
 root="$work/root"
 mkdir -p "$work/module" "$root/boot/kernel" "$root/boot/defaults" \
-    "$root/dev" "$root/etc" "$root/bin" "$root/sbin" "$root/rescue" "$root/tmp"
+    "$root/boot/loader.conf.d" "$root/dev" "$root/etc" "$root/bin" \
+    "$root/sbin" "$root/rescue" "$root/tmp"
 env MAKEOBJDIR="$work/module" make -C "$here" SYSDIR="$src/sys"
 cp "$kernel" "$root/boot/kernel/kernel"
 cp "$work/module/md_preload_test.ko" "$root/boot/kernel/"
@@ -20,6 +21,10 @@ cp /boot/loader "$root/boot/loader"
 cp /boot/device.hints "$root/boot/device.hints"
 cp /boot/defaults/loader.conf "$root/boot/defaults/"
 cp -R /boot/lua "$root/boot/"
+cp /etc/login.conf "$root/etc/"
+printf '%s\n' '/dev/ada0p2 / ufs rw 1 1' > "$root/etc/fstab"
+printf '%s\n' '00000000-0000-0000-0000-000000000001' > "$root/etc/hostid"
+dd if=/dev/random of="$root/boot/entropy" bs=4096 count=1 2>/dev/null
 cp /rescue/rescue "$root/rescue/"
 for name in sh init mount sysctl mdconfig dd md5 kldunload reboot sync; do
     ln "$root/rescue/rescue" "$root/rescue/$name"

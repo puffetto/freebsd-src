@@ -29,6 +29,8 @@ The guest must print `MD_PRELOAD ALL TESTS PASSED` and exit with status zero.
 Two images, filled with distinct bytes and of different sizes, are loaded as
 `md_image`. A kernel consumer compares the returned pointers directly with the
 loader's preload records and checks sizes, contents and nested hold identity.
+The association is checked against an independent sector read from each actual
+provider; the test does not assume a fixed loader-module or md-unit order.
 It rejects unattached and malloc-backed consumers, insufficient access and
 write access, and attempts to acquire write access on the borrowing consumer.
 
