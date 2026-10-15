@@ -88,4 +88,23 @@ struct md_ioctl {
 #define	MD_CACHE	0x100	/* Cache vnode data */
 #define	MD_MUSTDEALLOC	0x200	/* BIO_DELETE only if dealloc is available */
 
+#ifdef _KERNEL
+#define MD_PRELOAD_API_VERSION	1
+struct g_consumer;
+
+/*
+ * Borrow an MD_PRELOAD provider's original backing memory without copying.
+ * Both calls require the GEOM topology lock.  The consumer must retain read
+ * and exclusive access, with no write access, until every hold is released.
+ * Holds may nest; pair each successful hold with one release on that consumer.
+ * While held, writes and detach (including MD_FORCE) fail with EBUSY.
+ * The returned extent is the provider's usable media size, not an allocation
+ * owned by the caller.  Neither call frees or changes the loader allocation.
+ * Failed holds leave output arguments unchanged.  EOPNOTSUPP denotes a
+ * non-preloaded provider; EBUSY denotes insufficient access or active writers.
+ */
+int md_preload_hold(struct g_consumer *, const void **, size_t *);
+void md_preload_release(struct g_consumer *);
+#endif
+
 #endif	/* _SYS_MDIOCTL_H_*/

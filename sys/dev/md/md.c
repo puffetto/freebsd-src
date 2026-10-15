@@ -279,6 +279,7 @@ struct md_s {
 		struct {
 			u_char *pl_ptr;
 			size_t pl_len;
+			u_int holds;	/* Protected by the GEOM topology lock. */
 			char name[PATH_MAX];
 		} s_preload;
 
@@ -463,6 +464,49 @@ s_write(struct indir *ip, off_t offset, uintptr_t ptr)
 	return (0);
 }
 
+/* Borrow the original loader allocation, never a BIO_READ copy. */
+int
+md_preload_hold(struct g_consumer *cp, const void **base, size_t *size)
+{
+	struct g_provider *pp;
+	struct md_s *sc;
+
+	g_topology_assert();
+	pp = cp->provider;
+	if (pp == NULL || pp->geom->class != &g_md_class)
+		return (EOPNOTSUPP);
+	sc = pp->geom->softc;
+	if (sc == NULL || (pp->geom->flags & G_GEOM_WITHER) != 0 ||
+	    (pp->flags & (G_PF_ORPHAN | G_PF_WITHER)) != 0)
+		return (ENXIO);
+	if (sc->type != MD_PRELOAD)
+		return (EOPNOTSUPP);
+	if (cp->acr == 0 || cp->ace == 0 || cp->acw != 0 || pp->acw != 0)
+		return (EBUSY);
+	if (sc->s_preload.holds == UINT_MAX)
+		return (EOVERFLOW);
+	sc->s_preload.holds++;
+	*base = sc->s_preload.pl_ptr;
+	*size = sc->mediasize;
+	return (0);
+}
+
+void
+md_preload_release(struct g_consumer *cp)
+{
+	struct md_s *sc;
+
+	g_topology_assert();
+	KASSERT(cp->provider != NULL &&
+	    cp->provider->geom->class == &g_md_class,
+	    ("md_preload_release: not an md consumer"));
+	sc = cp->provider->geom->softc;
+	KASSERT(sc->type == MD_PRELOAD && sc->s_preload.holds != 0 &&
+	    cp->acr != 0 && cp->ace != 0 && cp->acw == 0,
+	    ("md_preload_release: no hold or lost consumer access"));
+	sc->s_preload.holds--;
+}
+
 static int
 g_md_access(struct g_provider *pp, int r, int w, int e)
 {
@@ -479,6 +523,8 @@ g_md_access(struct g_provider *pp, int r, int w, int e)
 	e += pp->ace;
 	if ((sc->flags & MD_READONLY) != 0 && w > 0)
 		return (EROFS);
+	if (sc->type == MD_PRELOAD && sc->s_preload.holds != 0 && w > 0)
+		return (EBUSY);
 	if ((pp->acr + pp->acw + pp->ace) == 0 && (r + w + e) > 0) {
 		sc->opencount = 1;
 	} else if ((pp->acr + pp->acw + pp->ace) > 0 && (r + w + e) == 0) {
@@ -1538,6 +1584,11 @@ mddestroy(struct md_s *sc, struct thread *td)
 
 	if (sc->gp) {
 		g_topology_lock();
+		/* Forced detach must not orphan memory still borrowed by a caller. */
+		if (sc->type == MD_PRELOAD && sc->s_preload.holds != 0) {
+			g_topology_unlock();
+			return (EBUSY);
+		}
 		g_wither_geom(sc->gp, ENXIO);
 		g_topology_unlock();
 
