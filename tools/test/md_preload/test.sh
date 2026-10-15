@@ -9,6 +9,9 @@ fail() { echo "MD_PRELOAD FAIL: $*"; exit 1; }
 refuse() {
     if "$@"; then fail "unexpected success: $*"; fi
 }
+same() {
+    [ "$(md5 -q "$1")" = "$(md5 -q "$2")" ] || fail "content differs: $1 $2"
+}
 
 [ -f /md-preload-test-guest ] || fail 'missing disposable-guest marker'
 mdconfig -a -t malloc -s 64k -u 2
@@ -26,7 +29,7 @@ for stage in 1 2; do
         refuse mdconfig -d -o force -u "$unit"
         refuse mdconfig -r -s 128k -u "$unit"
         dd if="/dev/md$unit" of="/after$unit" bs=4096 2>/dev/null
-        cmp "/before$unit" "/after$unit"
+        same "/before$unit" "/after$unit"
     done
     refuse kldunload md_preload_test
     if [ "$stage" -eq 1 ]; then sysctl debug.md_preload_test=2; fi
@@ -35,7 +38,7 @@ done
 printf ordinary > /ordinary
 dd if=/ordinary of=/dev/md3 bs=1 conv=notrunc 2>/dev/null
 dd if=/dev/md3 of=/ordinary-read bs=1 count=8 2>/dev/null
-cmp /ordinary /ordinary-read
+same /ordinary /ordinary-read
 mdconfig -d -u 3
 sysctl debug.md_preload_test=0
 # Acquire and release again; the backing allocation survives both cycles.
@@ -45,7 +48,7 @@ kldunload md_preload_test
 # After the final release, the originally writable preload accepts writes again.
 dd if=/before0 of=/dev/md0 bs=4096 2>/dev/null
 dd if=/dev/md0 of=/after0 bs=4096 2>/dev/null
-cmp /before0 /after0
+same /before0 /after0
 mdconfig -d -o force -u 0
 mdconfig -d -u 1
 mdconfig -d -u 2

@@ -21,7 +21,7 @@ cp /boot/device.hints "$root/boot/device.hints"
 cp /boot/defaults/loader.conf "$root/boot/defaults/"
 cp -R /boot/lua "$root/boot/"
 cp /rescue/rescue "$root/rescue/"
-for name in sh init mount sysctl mdconfig dd cmp kldunload reboot sync; do
+for name in sh init mount sysctl mdconfig dd md5 kldunload reboot sync; do
     ln "$root/rescue/rescue" "$root/rescue/$name"
 done
 ln "$root/rescue/rescue" "$root/bin/sh"
