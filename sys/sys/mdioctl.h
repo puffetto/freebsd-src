@@ -97,7 +97,7 @@ struct g_consumer;
  * Both calls require the GEOM topology lock.  The consumer must retain read
  * and exclusive access, with no write access, until every hold is released.
  * Holds may nest; pair each successful hold with one release on that consumer.
- * While held, writes and detach (including MD_FORCE) fail with EBUSY.
+ * While held, writes are refused and detach (including MD_FORCE) fails EBUSY.
  * The returned extent is the provider's usable media size, not an allocation
  * owned by the caller.  Neither call frees or changes the loader allocation.
  * Failed holds leave output arguments unchanged.  EOPNOTSUPP denotes a
