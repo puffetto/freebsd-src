@@ -19,8 +19,8 @@ mdconfig -a -t malloc -s 64k -u 3
 trap 'sysctl debug.md_preload_test=0 >/dev/null 2>&1 || true' EXIT
 
 # Full images are already in RAM: reads before/after holds must preserve them.
-dd if=/dev/md0 of=/before0 bs=4096 2>/dev/null
-dd if=/dev/md1 of=/before1 bs=4096 2>/dev/null
+dd if=/dev/md0 of=/before0 bs=4096 status=none
+dd if=/dev/md1 of=/before1 bs=4096 status=none
 sysctl debug.md_preload_test=1
 for stage in 1 2; do
     for unit in 0 1; do
@@ -28,16 +28,16 @@ for stage in 1 2; do
         refuse mdconfig -d -u "$unit"
         refuse mdconfig -d -o force -u "$unit"
         refuse mdconfig -r -s 128k -u "$unit"
-        dd if="/dev/md$unit" of="/after$unit" bs=4096 2>/dev/null
+        dd if="/dev/md$unit" of="/after$unit" bs=4096 status=none
         same "/before$unit" "/after$unit"
     done
     refuse kldunload md_preload_test
     if [ "$stage" -eq 1 ]; then sysctl debug.md_preload_test=2; fi
 done
 # Unborrowed devices keep their existing read/write/detach behavior.
-printf ordinary > /ordinary
-dd if=/ordinary of=/dev/md3 bs=1 conv=notrunc 2>/dev/null
-dd if=/dev/md3 of=/ordinary-read bs=1 count=8 2>/dev/null
+dd if=/before0 of=/ordinary bs=512 count=1 status=none
+dd if=/ordinary of=/dev/md3 bs=512 count=1 status=none
+dd if=/dev/md3 of=/ordinary-read bs=512 count=1 status=none
 same /ordinary /ordinary-read
 mdconfig -d -u 3
 sysctl debug.md_preload_test=0
@@ -46,8 +46,8 @@ sysctl debug.md_preload_test=1
 sysctl debug.md_preload_test=0
 kldunload md_preload_test
 # After the final release, the originally writable preload accepts writes again.
-dd if=/before0 of=/dev/md0 bs=4096 2>/dev/null
-dd if=/dev/md0 of=/after0 bs=4096 2>/dev/null
+dd if=/before0 of=/dev/md0 bs=4096 status=none
+dd if=/dev/md0 of=/after0 bs=4096 status=none
 same /before0 /after0
 mdconfig -d -o force -u 0
 mdconfig -d -u 1
